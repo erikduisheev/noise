@@ -32,16 +32,27 @@ int main(int argc, char *argv[]){
 
   // -- get parameters that differ from defaults from command line:
   if(argc<2){usage(); return 1;} // must be at least one arg (fileName)
-	while((ch = crack(argc, argv, "r|v|", 0)) != NULL) {
+	while((ch = crack(argc, argv, "r|v|t|s|", 0)) != NULL) {
 	  switch(ch){
     	case 'r' : PARAMS.runMode = atoi(arg_option); break;
       case 'v' : PARAMS.verbosity = atoi(arg_option); break;
+      case 't' : PARAMS.sinusoidal = atoi(arg_option) * 100000; break;
+      case 's' : PARAMS.speed = atoi(arg_option); break;
       default  : usage(); return(0);
     }
   }
 
+	if (PARAMS.runMode < 1 || PARAMS.runMode > 4) {
+		printf("no valid run mode selected\n");
+		usage();
+		return 0;
+	}
+
   // filename of image.bmp should be last arg on command line:
   char* fileName = argv[arg_index];
+
+	// get image dimenstions (task 5), however it doesn't work perfectly
+	getImageDimensions(&PARAMS, fileName);
 
   // initialize memory on the gpu
   GPU_Palette P1;
@@ -54,25 +65,12 @@ int main(int argc, char *argv[]){
   if (PARAMS.verbosity == 2) viewParams(&PARAMS);
 
   // -- run the system depending on runMode
-  switch(PARAMS.runMode){
-      case 1: // add the numbers on the CPU
-          if (PARAMS.verbosity)
-              printf("\n -- doing something in runmode 1 -- \n");
-          start = clock();
-          runIt(&P1, &PARAMS);
-          end = clock();
-          break;
+	if (PARAMS.verbosity)
+    	printf("\n -- doing something in runmode %d -- \n", PARAMS.runMode);
 
-      case 2: // run GPU version
-          if (PARAMS.verbosity)
-              printf("\n -- doing somethign in runmode 2 -- \n");
-          start = clock();
-              // add some other function here...
-          end = clock();
-          break;
-
-      default: printf("no valid run mode selected\n");
-  }
+	start = clock();
+	runIt(&P1, &PARAMS);
+	end = clock();
 
   // print the time used
   printf("time used: %.2f\n", ((double)(end - start))/ CLOCKS_PER_SEC);
@@ -86,15 +84,22 @@ return 0;
 **************************************************************************/
 int runIt(GPU_Palette* P1, AParams* PARAMS){
 
-	CPUAnimBitmap animation(P1->gDIM, P1->gDIM, P1);
+	CPUAnimBitmap animation(P1->wDIM, P1->hDIM, P1);
   cudaMalloc((void**) &animation.dev_bitmap, animation.image_size());
   animation.initAnimation();
+	clock_t last_update = clock();
+
+	int err = updatePalette(P1, PARAMS);
+	animation.drawPalette(P1->wDIM, P1->hDIM, P1->gTPB);
 
   while(1){
+		clock_t cur_update = clock(); // (task 4)
 
-//    int err = updatePalette(P1);
-
-    animation.drawPalette(P1->gDIM, P1->gTPB);
+		if (cur_update > last_update + PARAMS->speed) {
+			int err = updatePalette(P1, PARAMS);
+	    animation.drawPalette(P1->wDIM, P1->hDIM, P1->gTPB);
+			last_update = cur_update;
+		}
   }
 
   return(0);
@@ -104,8 +109,25 @@ int runIt(GPU_Palette* P1, AParams* PARAMS){
                        PROGRAM FUNCTIONS
 **************************************************************************/
 // this function loads in the initial picture to process
-int openBMP(AParams* PARAMS, GPU_Palette* P1, char* fileName){
+int getImageDimensions(AParams* PARAMS, char* fileName){
+	FILE *infp;
+	if((infp = fopen(fileName, "r+b")) == NULL){
+		printf("can't open image of filename: %s\n", fileName);
+	  return 0;
+	}
 
+	// read in the 54-byte header
+	unsigned char header[54];
+	fread(header, sizeof(unsigned char), 54, infp);
+	fclose(infp);
+
+	PARAMS->width = *(int*)&header[18];
+	PARAMS->height = *(int*)&header[22];
+	PARAMS->size = 3 * PARAMS->width * PARAMS->height;
+	return 0;
+}
+
+int openBMP(AParams* PARAMS, GPU_Palette* P1, char* fileName){
 // open the file
 FILE *infp;
 if((infp = fopen(fileName, "r+b")) == NULL){
@@ -116,9 +138,6 @@ if((infp = fopen(fileName, "r+b")) == NULL){
 // read in the 54-byte header
 unsigned char header[54];
 fread(header, sizeof(unsigned char), 54, infp);
-PARAMS->width = *(int*)&header[18];
-PARAMS->height = *(int*)&header[22];
-PARAMS->size = 3 * PARAMS->width * PARAMS->height;
 
 // read in the data
 unsigned char data[PARAMS->size];
@@ -170,6 +189,8 @@ int setDefaults(AParams *PARAMS){
 
     PARAMS->verbosity       = 1;
     PARAMS->runMode         = 1;
+		PARAMS->sinusoidal			= 1;
+		PARAMS->speed						= 100000;
 
     PARAMS->height     = 800;
     PARAMS->width      = 800;
@@ -182,10 +203,12 @@ int setDefaults(AParams *PARAMS){
 int usage()
 {
 	printf("USAGE:\n");
-	printf("-r[val] -v[val] filename\n\n");
-  printf("e.g.> ex2 -r1 -v1 imagename.bmp\n");
+	printf("-r[val] -v[val] -t[val] -s[val] filename\n\n");
+  printf("e.g.> ex2 -r1 -v1 -t2 -s100000 SN.bmp\n");
   printf("v  verbose mode (0:none, 1:normal, 2:params\n");
-  printf("r  run mode (1:CPU, 2:GPU)\n");
+  printf("r  run mode (1: RGB update, 2: blue only, 3: red only, 4: green only)\n");
+  printf("t  sinusoidal time in seconds\n");
+  printf("s  clock ticks between image updates\n");
 
   return(0);
 }
@@ -196,6 +219,8 @@ int viewParams(const AParams *PARAMS){
     printf("--- PARAMETERS: ---\n");
 
     printf("run mode: %d\n", PARAMS->runMode);
+    printf("green sinusoidal time: %d\n", PARAMS->sinusoidal);
+    printf("clocsk between image updates: %d\n", PARAMS->speed);
 
     printf("image height: %d\n", PARAMS->height);
     printf("image width: %d\n", PARAMS->width);

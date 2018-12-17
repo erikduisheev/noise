@@ -49,7 +49,7 @@ __global__ void drawColor(unsigned char* optr,
   if (theBlue < 0) theBlue = 0;
   if (theBlue > 1) theBlue = 1;
 
-  
+
   optr[offset * 4 + 0] = 255 * theRed;    // red
   optr[offset * 4 + 1] = 255 * theGreen;  // green
   optr[offset * 4 + 2] = 255 * theBlue;   // blue
@@ -57,17 +57,17 @@ __global__ void drawColor(unsigned char* optr,
 }
 
 /*************************************************************************/
-void CPUAnimBitmap::drawPalette(int DIM, int TPB) {
+void CPUAnimBitmap::drawPalette(int WIDTH, int HEIGHT, int TPB) {
 
   dim3 threads(TPB, TPB);
-  dim3 blocks(DIM / TPB, DIM / TPB);
-  
+  dim3 blocks(WIDTH / TPB, HEIGHT / TPB);
+
 //  drawGray <<< blocks, threads >>> (dev_bitmap, thePalette->gray);
-  drawColor <<< blocks, threads >>> (dev_bitmap, 
+  drawColor <<< blocks, threads >>> (dev_bitmap,
                                      thePalette->red,
                                      thePalette->green,
                                      thePalette->blue);
-   
+
 
   // copy bitmap from device to host to draw frame:
   cudaMemcpy(get_ptr(), dev_bitmap, image_size(), cudaMemcpyDeviceToHost);
@@ -162,5 +162,3 @@ __device__ unsigned char value(float n1, float n2, int hue) {
     return (unsigned char) (255 * (n1 + (n2 - n1) * (240 - hue) / 60));
   return (unsigned char) (255 * n1);
 }
-
-

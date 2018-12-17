@@ -7,15 +7,16 @@
 /*
 class AParams {
 public:
-        
+
   int             verbosity;
   int             runMode;
-  
+
   int             imageHeight;
   int             imageWidth;
 };
 */
 
+int getImageDimensions(AParams* PARAMS, char* fileName);
 int openBMP(AParams *PARAMS, GPU_Palette* P1, char* fileName);
 int runIt(GPU_Palette* P1, AParams* PARAMS);
 

@@ -20,8 +20,8 @@ struct CPUAnimBitmap {
     GPU_Palette* thePalette;
     unsigned char* dev_bitmap;
 
-    CPUAnimBitmap(int w, int h, GPU_Palette* d); 
-    
+    CPUAnimBitmap(int w, int h, GPU_Palette* d);
+
     ~CPUAnimBitmap();
 
     unsigned char* get_ptr(void) const { return pixels; }
@@ -48,7 +48,7 @@ struct CPUAnimBitmap {
     static void Draw(void);
 
     void initAnimation();
-    void drawPalette(int DIM, int TPB);
+    void drawPalette(int WIDTH, int HEIGHT, int TPB);
 };
 
 
